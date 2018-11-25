@@ -5,81 +5,99 @@ import cv2
 import numpy as np
 import base64
 import queue
+import asyncio
+
+empty = asyncio.Semaphore(10)
+full = asyncio.Semaphore(0)
+emptyGrey = asyncio.Semaphore(10)
+fullGrey = asyncio.Semaphore(0)
+mutex = asyncio.Semaphore(0)
+
+extractCount = 0
+greyConversionCount = 0
+displayCount = 0
 
 def extractFrames(fileName, outputBuffer):
-    # Initialize frame count 
-    count = 0
+    global extractCount
+    while (extractCount<739):
+        empty.acquire()
+        try:    
+            # open video file
+            vidcap = cv2.VideoCapture(fileName)
 
-    # open video file
-    vidcap = cv2.VideoCapture(fileName)
-
-    # read first image
-    success,image = vidcap.read()
+            # read first image
+            success,image = vidcap.read()
     
-    print("Reading frame {} {} ".format(count, success))
-    while success:
-        
-        # add the frame to the buffer
-        outputBuffer.put(image)
-       
-        success,image = vidcap.read()
-        print('Reading frame {} {}'.format(count, success))
-        count += 1
-
-    print("Frame extraction complete")
+            print("Reading frame {} {} ".format(extractCount, success))
+            mutex.acquire()
+            try:
+                # add the frame to the buffer
+                outputBuffer.put(image)
+            finally:
+                mutex.release()
+                
+            extractCount += 1
+        finally:
+            full.release()
+    #print("Frame extraction complete")
 
 def greyFrame(inputBuffer,outputBuffer):
+    global greyConversionCount
+    while (greyConversionCount<739):
     
-    count = 0
+        full.acquire()
+        try:
+            print("Converting frame {}".format(greyConversionCount))
     
-    while not inputBuffer.empty():
-        print("Converting frame {}".format(count))
-    
-        # get the next frame
-        inputFrame = inputBuffer.get()
-
-        # convert the image to grayscale
-        grayscaleFrame = cv2.cvtColor(inputFrame, cv2.COLOR_BGR2GRAY)
+            mutex.acquire()
+            try:
+                # get the next frame
+                inputFrame = inputBuffer.get()
+            finally:
+                mutex.release()
+            
+            # convert the image to grayscale
+            grayscaleFrame = cv2.cvtColor(inputFrame, cv2.COLOR_BGR2GRAY)
         
-        #jpgImage = cv2.imencode('.jpg', grayscaleFrame)
-        
-        # econde frame to base 64
-        #jpgAsText = base64.b64encode(jpgImage)
-        
-        
-        
-        # put image into buffer
-        outputBuffer.put(grayscaleFrame)
-        
-        count += 1
-
+            emptyGrey.acquire()
+            try:
+                mutex.acquire()
+                try:
+                    # put image into buffer
+                    outputBuffer.put(grayscaleFrame)
+                finally:
+                    mutex.release()
+                greyConversionCount += 1
+            finally:
+                fullGrey.release()
+        finally:
+            empty.release()
+            
 def displayFrames(inputBuffer):
-    # initialize frame count
-    count = 0
-
+    global displayCount
+    
     # go through each frame in the buffer until the buffer is empty
-    while not inputBuffer.empty():
-        # get the next frame
-        inputGreyFrame = inputBuffer.get()
-        
-        #jpgRawImage = base64.b64decode(inputGreyFrame)
+    while(displayCount < 739):
+        fullGrey.acquire()
+        try:
+            mutex.acquire()
+            try:
+                # get the next frame
+                inputGreyFrame = inputBuffer.get()
+            finally:
+                mutex.release()
 
-        # convert the raw frame to a numpy array
-        #jpgImage = np.asarray(bytearray(inputGreyFrame), dtype=np.uint8)
-        
-        # get a jpg encoded frame
-        #img = cv2.imdecode( jpgImage ,cv2.IMREAD_UNCHANGED)
+            print("Displaying frame {}".format(displayCount))        
 
-        print("Displaying frame {}".format(count))        
+            # display the image in a window called "video" and wait 42ms
+            # before displaying the next frame
+            cv2.imshow("Video", inputGreyFrame)
+            if cv2.waitKey(42) and 0xFF == ord("q"):
+                break
 
-        # display the image in a window called "video" and wait 42ms
-        # before displaying the next frame
-        cv2.imshow("Video", inputGreyFrame)
-        if cv2.waitKey(42) and 0xFF == ord("q"):
-            break
-
-        count += 1
-
+            displayCount += 1
+        finally:
+            emptyGrey.release()
     print("Finished displaying all frames")
     # cleanup the windows
     cv2.destroyAllWindows()
