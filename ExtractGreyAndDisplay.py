@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import threading
 import cv2
 import numpy as np
@@ -16,62 +18,40 @@ def extractFrames(fileName, outputBuffer):
     
     print("Reading frame {} {} ".format(count, success))
     while success:
-        # get a jpg encoded frame
-        success, jpgImage = cv2.imencode('.jpg', image)
-
-        #encode the frame as base 64 to make debugging easier
-        jpgAsText = base64.b64encode(jpgImage)
-
+        
         # add the frame to the buffer
-        outputBuffer.put(jpgAsText)
+        outputBuffer.put(image)
        
         success,image = vidcap.read()
         print('Reading frame {} {}'.format(count, success))
         count += 1
 
     print("Frame extraction complete")
+
+def greyFrame(inputBuffer,outputBuffer):
     
-def greyFrames(inputBuffer,outputBuffer):
-    # initialize frame count
     count = 0
-
-    # get the next frame file name
-    #inFileName = "{}/frame_{:04d}.jpg".format(outputDir, count)
-
-    # load the next file
-    #inputFrame = cv2.imread(inFileName, cv2.IMREAD_COLOR)
-
+    
     while not inputBuffer.empty():
         print("Converting frame {}".format(count))
-        
-        frameAsText = inputBuffer.get()
-        
-        # decode the frame 
-        jpgRawImage = base64.b64decode(frameAsText)
-
-        # convert the raw frame to a numpy array
-        jpgImage = np.asarray(bytearray(jpgRawImage), dtype=np.uint8)
+    
+        # get the next frame
+        inputFrame = inputBuffer.get()
 
         # convert the image to grayscale
-        grayscaleFrame = cv2.cvtColor(jpgImage, cv2.COLOR_BGR2GRAY)
-    
-        # generate output file name
-        #outFileName = "{}/grayscale_{:04d}.jpg".format(outputDir, count)
-
-        # write output file
-        #cv2.imwrite(outFileName, grayscaleFrame)
+        grayscaleFrame = cv2.cvtColor(inputFrame, cv2.COLOR_BGR2GRAY)
         
+        #jpgImage = cv2.imencode('.jpg', grayscaleFrame)
+        
+        # econde frame to base 64
+        #jpgAsText = base64.b64encode(jpgImage)
+        
+        
+        
+        # put image into buffer
         outputBuffer.put(grayscaleFrame)
-
+        
         count += 1
-
-        # generate input file name for the next frame
-        #inFileName = "{}/frame_{:04d}.jpg".format(outputDir, count)
-
-        # load the next frame
-        #inputFrame = cv2.imread(inFileName, cv2.IMREAD_COLOR)
-
-
 
 def displayFrames(inputBuffer):
     # initialize frame count
@@ -80,22 +60,21 @@ def displayFrames(inputBuffer):
     # go through each frame in the buffer until the buffer is empty
     while not inputBuffer.empty():
         # get the next frame
-        frameAsText = inputBuffer.get()
-
-        # decode the frame 
-        jpgRawImage = base64.b64decode(frameAsText)
+        inputGreyFrame = inputBuffer.get()
+        
+        #jpgRawImage = base64.b64decode(inputGreyFrame)
 
         # convert the raw frame to a numpy array
-        jpgImage = np.asarray(bytearray(jpgRawImage), dtype=np.uint8)
+        #jpgImage = np.asarray(bytearray(inputGreyFrame), dtype=np.uint8)
         
         # get a jpg encoded frame
-        img = cv2.imdecode( jpgImage ,cv2.IMREAD_UNCHANGED)
+        #img = cv2.imdecode( jpgImage ,cv2.IMREAD_UNCHANGED)
 
         print("Displaying frame {}".format(count))        
 
         # display the image in a window called "video" and wait 42ms
         # before displaying the next frame
-        cv2.imshow("Video", img)
+        cv2.imshow("Video", inputGreyFrame)
         if cv2.waitKey(42) and 0xFF == ord("q"):
             break
 
@@ -111,13 +90,13 @@ filename = 'clip.mp4'
 # shared queue  
 extractionQueue = queue.Queue()
 
-helperExtractionQueue = queue.Queue()
+greyExtractionQueue = queue.Queue()
 
 # extract the frames
 extractFrames(filename,extractionQueue)
 
-greyFrames(extractionQueue,helperExtractionQueue)
+#grey the Frames
+greyFrame(extractionQueue,greyExtractionQueue)
 
 # display the frames
-displayFrames(helperExtractionQueue)
-
+displayFrames(greyExtractionQueue)
